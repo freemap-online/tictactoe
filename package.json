@@ -1,0 +1,12 @@
+{
+  "name": "online-tic-tac-toe",
+  "version": "1.0.0",
+  "description": "Firebase-free online random matchmaking tic-tac-toe",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  }
+}
