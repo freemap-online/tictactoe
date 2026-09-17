@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0">
+
+<title>Online Tic-Tac-Toe</title>
+
+<style>
+
+@font-face {
+
+    font-family: "MyFont";
+
+    src: url("./Myfont-Regular.ttf")
+         format("truetype");
+
+}
+
+
+* {
+    box-sizing: border-box;
+}
+
+
+body {
+
+    margin: 0;
+
+    min-height: 100vh;
+
+    display: flex;
+
+    justify-content: center;
+
+    align-items: center;
+
+    background: #111;
+
+    color: white;
+
+    font-family:
+        Arial,
+        sans-serif;
+
+}
+
+
+.container {
+
+    width: min(92vw, 420px);
+
+    text-align: center;
+
+}
+
+
+h1 {
+
+    margin-bottom: 8px;
+
+}
+
+
+#status {
+
+    min-height: 28px;
+
+    margin-bottom: 18px;
+
+    color: #bbb;
+
+}
+
+
+#board {
+
+    width: min(90vw, 360px);
+
+    height: min(90vw, 360px);
+
+    margin: auto;
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(3, 1fr);
+
+    grid-template-rows:
+        repeat(3, 1fr);
+
+    gap: 8px;
+
+}
+
+
+.cell {
+    border: 0;
+    border-radius: 12px;
+    background: #252525;
+
+    font-family:
+        "MyFont",
+        Arial,
+        sans-serif;
+
+    font-size: 80px;
+    line-height: 1;
+
+    cursor: pointer;
+
+    -webkit-tap-highlight-color:
+        transparent;
+}
+
+.cell:hover {
+    background: #303030;
+}
+
+.cell:active {
+    background: #3a3a3a;
+}
+
+.cell:disabled {
+    cursor: default;
+}
+
+/* O = 파란색 */
+.cell.o {
+    color: #1683ff;
+}
+
+/* X = 빨간색 */
+.cell.x {
+    color: #ff3333;
+}
+
+.cell:hover {
+
+    background: #303030;
+
+}
+
+
+.cell:active {
+
+    background: #3a3a3a;
+
+}
+
+
+.cell:disabled {
+
+    cursor: default;
+
+}
+
+
+#restart {
+
+    margin-top: 20px;
+
+    padding:
+        12px 25px;
+
+    border: 0;
+
+    border-radius: 10px;
+
+    background: white;
+
+    color: #111;
+
+    font-size: 16px;
+
+    font-weight: bold;
+
+    cursor: pointer;
+
+}
+
+
+#restart:disabled {
+
+    opacity: 0.4;
+
+    cursor: default;
+
+}
+
+
+#mySymbol {
+
+    margin-top: 10px;
+
+    font-size: 14px;
+
+    color: #777;
+
+}
+
+</style>
+
+</head>
+
+
+<body>
+
+
+<div class="container">
+
+    <h1>
+        온라인 틱택토
+    </h1>
+
+
+    <div id="status">
+        서버에 연결하는 중...
+    </div>
+
+
+    <div id="board">
+
+        <button class="cell"
+                data-index="0"></button>
+
+        <button class="cell"
+                data-index="1"></button>
+
+        <button class="cell"
+                data-index="2"></button>
+
+        <button class="cell"
+                data-index="3"></button>
+
+        <button class="cell"
+                data-index="4"></button>
+
+        <button class="cell"
+                data-index="5"></button>
+
+        <button class="cell"
+                data-index="6"></button>
+
+        <button class="cell"
+                data-index="7"></button>
+
+        <button class="cell"
+                data-index="8"></button>
+
+    </div>
+
+
+    <div id="mySymbol"></div>
+
+
+    <button id="restart"
+            disabled>
+
+        다시 매칭
+
+    </button>
+
+</div>
+
+
+<script>
+
+
+/* ========================================
+   WebSocket 주소
+   ======================================== */
+
+
+/*
+ * 같은 서버에서 index.html을 제공한다면
+ * 자동으로 현재 주소를 사용한다.
+ */
+
+const protocol =
+    location.protocol === "https:"
+        ? "wss:"
+        : "ws:";
+
+
+const socket =
+    new WebSocket(
+        `${protocol}//${location.host}`
+    );
+
+
+/* ========================================
+   화면
+   ======================================== */
+
+const cells =
+    document.querySelectorAll(".cell");
+
+
+const statusText =
+    document.getElementById("status");
+
+
+const restartButton =
+    document.getElementById("restart");
+
+
+const mySymbolText =
+    document.getElementById("mySymbol");
+
+
+/* ========================================
+   게임 변수
+   ======================================== */
+
+let mySymbol = "";
+
+let board = [
+    "", "", "",
+    "", "", "",
+    "", "", ""
+];
+
+let currentTurn = "";
+
+let gameFinished = false;
+
+
+/* ========================================
+   문자 변환
+   ======================================== */
+
+
+/*
+ * 네 커스텀 폰트:
+ *
+ * 8 → O
+ * 9 → X
+ */
+
+function symbolToFont(symbol) {
+
+    if (symbol === "O") {
+        return "8";
+    }
+
+    if (symbol === "X") {
+        return "9";
+    }
+
+    return "";
+
+}
+
+
+/* ========================================
+   보드 표시
+   ======================================== */
+
+function renderBoard() {
+
+    cells.forEach((cell, index) => {
+
+        const symbol = board[index];
+
+        // 기존 클래스 제거
+        cell.classList.remove("o", "x");
+
+        // 커스텀 폰트 문자
+        if (symbol === "O") {
+
+            cell.textContent = "8";
+            cell.classList.add("o");
+
+        }
+        else if (symbol === "X") {
+
+            cell.textContent = "9";
+            cell.classList.add("x");
+
+        }
+        else {
+
+            cell.textContent = "";
+
+        }
+
+        cell.disabled =
+            symbol !== "" ||
+            gameFinished ||
+            currentTurn !== mySymbol;
+
+    });
+}
+
+/* ========================================
+   상태 표시
+   ======================================== */
+
+function updateStatus() {
+
+    if (!socket ||
+        socket.readyState !== WebSocket.OPEN) {
+
+        statusText.textContent =
+            "서버와 연결되지 않았습니다.";
+
+        return;
+    }
+
+
+    if (!mySymbol) {
+
+        statusText.textContent =
+            "랜덤 상대를 찾는 중...";
+
+        return;
+    }
+
+
+    if (gameFinished) {
+        return;
+    }
+
+
+    if (currentTurn === mySymbol) {
+
+        statusText.textContent =
+            `당신의 차례 (${mySymbol})`;
+
+    }
+    else {
+
+        statusText.textContent =
+            `상대방의 차례 (${currentTurn})`;
+
+    }
+
+}
+
+
+/* ========================================
+   서버 연결
+   ======================================== */
+
+socket.addEventListener(
+    "open",
+    () => {
+
+        statusText.textContent =
+            "랜덤 상대를 찾는 중...";
+
+
+        socket.send(
+            JSON.stringify({
+                type: "find_match"
+            })
+        );
+
+    }
+);
+
+
+/* ========================================
+   서버 메시지
+   ======================================== */
+
+socket.addEventListener(
+    "message",
+    event => {
+
+        let data;
+
+        try {
+
+            data =
+                JSON.parse(event.data);
+
+        }
+        catch {
+
+            return;
+
+        }
+
+
+        /* 연결 */
+
+        if (data.type === "connected") {
+
+            return;
+
+        }
+
+
+        /* 대기 */
+
+        if (data.type === "waiting") {
+
+            statusText.textContent =
+                "상대를 기다리는 중...";
+
+            return;
+
+        }
+
+
+        /* 매칭 */
+
+        if (data.type === "matched") {
+
+            mySymbol =
+                data.symbol;
+
+
+            gameFinished = false;
+
+
+            restartButton.disabled =
+                true;
+
+
+            mySymbolText.textContent =
+                `당신은 ${mySymbol}`;
+
+
+            if (mySymbol === "X") {
+
+                statusText.textContent =
+                    "매칭 완료! 당신이 먼저 시작합니다.";
+
+            }
+            else {
+
+                statusText.textContent =
+                    "매칭 완료! 상대방의 첫 수를 기다립니다.";
+
+            }
+
+
+            return;
+
+        }
+
+
+        /* 게임 상태 */
+
+        if (data.type === "state") {
+
+            board =
+                data.board || board;
+
+
+            currentTurn =
+                data.turn || "";
+
+
+            if (data.winner) {
+
+                gameFinished = true;
+
+                restartButton.disabled =
+                    false;
+
+
+                if (data.winner === "DRAW") {
+
+                    statusText.textContent =
+                        "무승부!";
+
+                }
+                else if (
+                    data.winner === mySymbol
+                ) {
+
+                    statusText.textContent =
+                        "🎉 당신이 이겼습니다!";
+
+                }
+                else {
+
+                    statusText.textContent =
+                        "상대방이 이겼습니다.";
+
+                }
+
+            }
+            else {
+
+                gameFinished = false;
+
+                updateStatus();
+
+            }
+
+
+            renderBoard();
+
+            return;
+
+        }
+
+
+        /* 상대방 나감 */
+
+        if (data.type === "opponent_left") {
+
+            gameFinished = true;
+
+            restartButton.disabled =
+                false;
+
+
+            statusText.textContent =
+                "상대방이 나갔습니다.";
+
+            renderBoard();
+
+            return;
+
+        }
+
+    }
+);
+
+
+/* ========================================
+   칸 클릭
+   ======================================== */
+
+cells.forEach(
+    cell => {
+
+        cell.addEventListener(
+            "click",
+            () => {
+
+                if (
+                    gameFinished ||
+                    currentTurn !== mySymbol
+                ) {
+                    return;
+                }
+
+
+                const index =
+                    Number(
+                        cell.dataset.index
+                    );
+
+
+                if (board[index] !== "") {
+                    return;
+                }
+
+
+                /*
+                 * 서버에 칸 번호만 보낸다.
+                 */
+
+                socket.send(
+                    JSON.stringify({
+
+                        type: "move",
+
+                        index
+
+                    })
+                );
+
+            }
+        );
+
+    }
+);
+
+
+/* ========================================
+   다시 매칭
+   ======================================== */
+
+restartButton.addEventListener(
+    "click",
+    () => {
+
+        board = [
+            "", "", "",
+            "", "", "",
+            "", "", ""
+        ];
+
+
+        mySymbol = "";
+
+        currentTurn = "";
+
+        gameFinished = false;
+
+
+        restartButton.disabled =
+            true;
+
+
+        mySymbolText.textContent = "";
+
+
+        renderBoard();
+
+
+        statusText.textContent =
+            "새로운 상대를 찾는 중...";
+
+
+        socket.send(
+            JSON.stringify({
+                type: "rematch"
+            })
+        );
+
+    }
+);
+
+
+/* ========================================
+   연결 끊김
+   ======================================== */
+
+socket.addEventListener(
+    "close",
+    () => {
+
+        statusText.textContent =
+            "서버와 연결이 끊어졌습니다.";
+
+        restartButton.disabled =
+            true;
+
+    }
+);
+
+
+/* ========================================
+   오류
+   ======================================== */
+
+socket.addEventListener(
+    "error",
+    () => {
+
+        statusText.textContent =
+            "서버 연결 오류";
+
+    }
+);
+
+
+</script>
+
+</body>
+
+</html>
